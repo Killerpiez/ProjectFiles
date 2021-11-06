@@ -1,0 +1,111 @@
+% This lab is designed to implement a controller-based system for a cart that can balance an inverted pendulum
+% The cart could move freely on an X-Direction track and had an inverted pendulum balance that could rotate freely on the same
+% plane. The cart using the program controller, could balance the pendulum regardless of outside disturbances 
+% I.E we pushed the pendulum to the left or right and the cart would move to compensate and regain balance.
+clc
+close all
+T=.002;
+Kenc=2.275e-5;
+a=7.1973;
+b=1.6061;
+t = simout(:,1);
+x = Kenc*simout(:,2);
+V = simout(:,3);
+
+% Set up filter to do the differentation
+derv = [1 -1]/T;
+
+%Compute the velocity by differentiating position
+xdot1 = filter(derv,1, x);
+
+%Compute the acceleration by differentiating velocity
+acc1 = filter(derv,1,xdot1);
+
+% Sample Frequency in Hz
+fs = 1/T;
+
+% Set Butterworth filter
+fsc = (1/2)*fs; % Nyquist frequency = (1/2)*sample_frequency;
+wn = 10/fsc;    % Low pass cutoff frequency is 10 Hz  
+                % wn is the cutoff freq divided by the Nyquist freq
+
+%[bf,af] = butter(2,wn);  % Coefficients of the Butterworth filter
+xdot = filter(bf,af,xdot1); % Filtered speed
+acc = filter(bf,af,acc1);   % Filtered acceleration
+
+% The voltage is filtered so it has the same delay as xdot and accdot
+Vf = filter(bf,af,V);
+
+%xdot = xdot1;
+%acc = acc1;
+%Vf = V;
+xfilt = filter(bf,af,x);
+xmax = max(x);
+xdotmax = max(xdot);
+accmax = max(acc);
+plot(t,x/xmax,t,xdot/xdotmax,t,acc/accmax)
+grid on
+title('Measured Data' )
+legend('x/x_m_a_x','v/v_m_a_x','acc/acc_m_a_x')
+figure 
+p1 = plot(t,xdot1,t,xdot);
+title('v filtered and unfiltered','Fontsize', 12 )
+set(gca,'FontSize',11)
+xlabel('Time in Seconds', 'FontSize',12)
+ylabel ('speed','FontSize',12)
+
+% Set the line width for plotting
+set(p1,'LineWidth',2)
+set(p1,'MarkerSize',10)
+figure 
+p1 = plot(t,acc1,t,acc);
+title('acceleration filtered and unfiltered','Fontsize', 12 )
+set(gca,'FontSize',11)
+xlabel('Time in Seconds', 'FontSize',12)
+ylabel ('speed','FontSize',12)
+
+% Set the line width for plotting
+set(p1,'LineWidth',2)
+set(p1,'MarkerSize',10)
+figure 
+p3 = plot(t,V,t,Vf);
+title('Voltage filtered and unfiltered')
+set(gca,'FontSize',11)
+xlabel('Time in Seconds', 'FontSize',12)
+ylabel ('Voltage','FontSize',12)
+
+% Set the line width for plotting
+set(p3,'LineWidth',2)
+set(p3,'MarkerSize',10)
+
+%N = max(size(simout))
+nmax = max(size(t))-100;
+nmin = 100;
+sec = [nmin nmax];
+
+% x2dot = -a*x2 + b*V = [-x2 V]*[a b]'
+%Compute the regression matrix and its summation
+W = zeros(1,2);
+Rw = zeros(2,2);
+Rwy = zeros(2,1);
+Ry = 0;
+for n=sec(1):sec(2);
+W(1,1) = -xdot(n);
+W(1,2) = Vf(n);
+y = acc(n);
+   Rw  = Rw + (W')*W;
+   Rwy = Rwy + (W')*y;
+   Ry  = Ry + (y')*y;
+end
+khat = inv(Rw)*Rwy;
+Rerror = Ry - (Rwy')*inv(Rw)*Rwy;
+Cond = cond(Rw);
+ResidualErrorIndex = sqrt(Rerror/Ry);
+
+%Compute Parameters
+a_hat = khat(1); b_hat = khat(2);
+fprintf('Data elements used = [%4.0f, %4.0f]\n', sec(1),sec(2));
+fprintf('Identification Results:\n');
+fprintf(' a_hat = %7.4f    b_hat = %7.5f\n', a_hat, b_hat);
+fprintf('%% Residual error index : = %10.7f   \n', ResidualErrorIndex);
+fprintf('%% Condition # of Rw: = %7.4e   \n', Cond);
